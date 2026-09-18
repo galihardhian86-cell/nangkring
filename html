@@ -1,1 +1,730 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Angkringan Nusantara - Pesan Online</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
+                    colors: {
+                        brand: {
+                            50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a',
+                            300: '#fcd34d', 400: '#fbbf24', 500: '#f59e0b',
+                            600: '#d97706', 700: '#b45309',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #f8fafc; overflow-x: hidden; }
+        .modal-enter { opacity: 0; transform: scale(0.95); pointer-events: none; }
+        .modal-active { opacity: 1; transform: scale(1); pointer-events: auto; }
+        .sidebar-enter { transform: translateX(100%); }
+        .sidebar-active { transform: translateX(0); }
+        .overlay-enter { opacity: 0; pointer-events: none; }
+        .overlay-active { opacity: 1; pointer-events: auto; }
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        
+        .timeline-step { position: relative; padding-left: 32px; padding-bottom: 28px; border-left: 2px solid #cbd5e1; transition: all 0.3s ease; }
+        .timeline-step:last-child { border-left-color: transparent; padding-bottom: 0; }
+        .timeline-step::before {
+            content: ''; position: absolute; left: -10px; top: 0; width: 18px; height: 18px; border-radius: 50%;
+            background-color: #cbd5e1; border: 3px solid #ffffff; transition: all 0.3s ease;
+        }
+        .timeline-step.active::before { background-color: #f59e0b; box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.2); }
+        .timeline-step.active { border-left-color: #f59e0b; }
+        .timeline-step.completed::before { background-color: #10b981; }
+        .timeline-step.completed { border-left-color: #10b981; }
+        
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+        .pulse-badge { animation: pulse-ring 2s infinite ease-in-out; }
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
 
+    <!-- Navbar -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-10 h-10 bg-brand-500 rounded-2xl flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+                    <i class="fa-solid fa-fire text-base"></i>
+                </div>
+                <div>
+                    <h1 class="font-extrabold text-base text-slate-900 tracking-tight leading-none">Angkringan<span class="text-brand-500">.</span></h1>
+                    <span class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Pesan Online Cepat</span>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <button onclick="openSheetsConfigModal()" class="p-2 text-slate-600 hover:text-emerald-600 transition-colors bg-slate-100 hover:bg-emerald-50 rounded-xl w-10 h-10 flex items-center justify-center border border-slate-200 shadow-sm text-xs" title="Pengaturan Google Sheets">
+                    <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                </button>
+                <button onclick="toggleCart()" class="relative p-2 text-slate-700 hover:text-brand-600 transition-colors bg-slate-100 rounded-xl w-10 h-10 flex items-center justify-center border border-slate-200 shadow-sm">
+                    <i class="fa-solid fa-basket-shopping text-sm"></i>
+                    <span id="cart-badge" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 w-5 rounded-full flex items-center justify-center hidden border-2 border-white transition-transform">0</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-3xl mx-auto px-4 py-6 w-full">
+        
+        <!-- Live Status & Queue Card (Hidden by default) -->
+        <div id="live-status-card" class="hidden bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl border-2 border-brand-400 p-5 shadow-2xl mb-6 relative overflow-hidden text-white">
+            <div class="absolute top-0 right-0 bg-brand-500 text-slate-950 font-extrabold text-[10px] px-3.5 py-1.5 rounded-bl-xl uppercase tracking-widest pulse-badge flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-red-600 animate-ping"></span> Live Tracking
+            </div>
+            
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 pb-4 border-b border-slate-700">
+                <div>
+                    <span class="text-xs text-brand-400 font-bold uppercase tracking-wider">Nomor Pesanan Anda</span>
+                    <h3 class="text-3xl font-black text-white">#<span id="track-order-id">0000</span></h3>
+                    <p class="text-xs text-slate-300 mt-0.5"><i class="fa-solid fa-user mr-1 text-brand-400"></i> <span id="track-name">-</span> (<span id="track-wa">-</span>)</p>
+                </div>
+                <div class="bg-slate-800/90 border border-slate-700 px-4 py-2.5 rounded-xl w-full sm:w-auto text-left sm:text-right">
+                    <p class="text-[10px] text-slate-400 font-medium">Jam Server Real-Time</p>
+                    <p id="live-clock" class="font-mono font-black text-base text-brand-400 tracking-widest">00:00:00</p>
+                </div>
+            </div>
+
+            <!-- Queue & Estimate Box -->
+            <div class="bg-amber-500/10 border border-amber-400/30 rounded-xl p-3.5 mb-5 flex items-center justify-between text-xs backdrop-blur-sm">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 text-lg flex-shrink-0">
+                        <i class="fa-solid fa-people-line"></i>
+                    </div>
+                    <div>
+                        <p class="font-bold text-amber-300">Antrean & Estimasi Dapur</p>
+                        <p class="text-[11px] text-slate-300 mt-0.5" id="queue-desc-text">Menghitung posisi antrean...</p>
+                    </div>
+                </div>
+                <div class="text-right flex-shrink-0 bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
+                    <span class="block text-[10px] text-slate-400 font-medium uppercase">Posisi Antrean</span>
+                    <span class="font-black text-brand-400 text-sm" id="queue-num-display">Menunggu</span>
+                </div>
+            </div>
+
+            <div class="mb-6 bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-notch fa-spin text-brand-400"></i> Progres Pembuatan Dapur
+                </h4>
+                <div class="relative ml-3">
+                    <div id="step-1" class="timeline-step">
+                        <h5 class="text-sm font-bold text-white">1. Pesanan Diterima & Masuk Antrean</h5>
+                        <p class="text-xs text-slate-400">Menunggu konfirmasi dapur & pencatatan sistem.</p>
+                    </div>
+                    <div id="step-2" class="timeline-step">
+                        <h5 class="text-sm font-bold text-white">2. Sedang Dimasak / Diracik</h5>
+                        <p class="text-xs text-slate-400">Koki sedang menyiapkan pesanan hangat Anda.</p>
+                    </div>
+                    <div id="step-3" class="timeline-step">
+                        <h5 class="text-sm font-bold text-white">3. Siap Diambil / Disajikan</h5>
+                        <p class="text-xs text-emerald-400 font-semibold">Pesanan siap! Tunjukkan nomor pesanan di meja kasir.</p>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="finishCustomerOrder()" id="btn-finish-order" class="w-full bg-slate-700 text-slate-400 font-bold py-3 rounded-xl cursor-not-allowed pointer-events-none transition-all text-xs uppercase tracking-wider">
+                Menunggu Selesai...
+            </button>
+        </div>
+
+        <!-- Hero Header -->
+        <div class="bg-gradient-to-r from-amber-500 to-orange-600 rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-orange-500/10 mb-8 flex flex-col justify-between">
+            <span class="bg-white/20 text-white text-[10px] font-extrabold px-3.5 py-1.5 rounded-full backdrop-blur-sm mb-3 w-fit tracking-wider uppercase">Menu Resmi Angkringan Nusantara</span>
+            <h2 class="text-2xl sm:text-3xl font-black mb-2">Makan Nikmat, Harga Merakyat! 🍢🔥</h2>
+            <p class="text-amber-100 text-xs sm:text-sm opacity-90 max-w-lg">Pilih menu favoritmu, Split QRIS otomatis (Toast=A, Gorengan=B, Minuman=C), dan pantau status real-time langsung dari dapur.</p>
+        </div>
+
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-extrabold text-base text-slate-900 flex items-center gap-2">
+                <i class="fa-solid fa-utensils text-brand-500"></i> Daftar Menu Angkringan
+            </h3>
+        </div>
+        
+        <!-- Menu Grid -->
+        <div id="menu-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3.5 pb-24">
+            <!-- Rendered dynamically -->
+        </div>
+    </main>
+
+    <!-- Global Overlay -->
+    <div id="global-overlay" onclick="closeAllModals()" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 overlay-enter transition-opacity duration-300"></div>
+
+    <!-- Cart Sidebar -->
+    <div id="cart-sidebar" class="fixed top-0 right-0 w-[85vw] max-w-sm h-full bg-white z-50 shadow-2xl sidebar-enter transition-transform duration-300 flex flex-col">
+        <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <h3 class="font-extrabold text-slate-900 flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-basket-shopping text-brand-500"></i> Keranjang Pesanan
+            </h3>
+            <button onclick="toggleCart()" class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        
+        <div id="cart-items-container" class="flex-1 overflow-y-auto p-4 custom-scroll flex flex-col gap-3">
+            <div id="empty-cart" class="flex flex-col items-center justify-center h-full text-slate-400 py-12">
+                <i class="fa-solid fa-bowl-food text-4xl mb-2 text-slate-300"></i>
+                <p class="text-xs font-semibold">Keranjang masih kosong</p>
+            </div>
+        </div>
+
+        <div id="cart-footer" class="p-4 border-t border-slate-100 bg-slate-50 hidden">
+            <div class="flex justify-between items-center mb-3">
+                <span class="text-xs font-bold text-slate-500 uppercase">Total Pembayaran</span>
+                <span id="cart-total-price" class="text-base font-black text-slate-900">Rp 0</span>
+            </div>
+            <button onclick="openCheckoutModal()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl shadow-md transition-all text-xs uppercase tracking-wider">
+                Lanjut Pembayaran <i class="fa-solid fa-arrow-right ml-1"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal Checkout -->
+    <div id="checkout-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-enter transition-all duration-300 pointer-events-none">
+        <div class="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="font-extrabold text-slate-900 text-sm">Informasi Pemesan</h3>
+                <button onclick="closeModal('checkout-modal')" class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-5">
+                <form id="order-form" onsubmit="processSplitQRIS(event)">
+                    <div class="mb-3">
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Nama Lengkap *</label>
+                        <input type="text" id="input-name" required placeholder="Cth: Budi Santoso" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Nomor WhatsApp *</label>
+                        <input type="tel" id="input-wa" required placeholder="081234..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+                    <div class="bg-amber-50 border border-amber-200 rounded-xl p-3.5 mb-4 text-[11px] space-y-1 text-amber-900">
+                        <p class="font-bold flex items-center gap-1"><i class="fa-solid fa-info-circle"></i> Sistem Split QRIS Otomatis:</p>
+                        <p>• Toast ➔ QRIS A<br>• Gorengan ➔ QRIS B<br>• Minuman ➔ QRIS C</p>
+                    </div>
+                    <button type="submit" class="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl shadow-md text-xs uppercase tracking-wider">
+                        Tampilkan QRIS <i class="fa-solid fa-qrcode ml-1"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal QRIS -->
+    <div id="qris-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-enter transition-all duration-300 pointer-events-none">
+        <div class="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+            <div class="p-4 bg-slate-900 text-white text-center">
+                <h3 class="font-bold text-sm">Scan QRIS Pembayaran (Split)</h3>
+                <p class="text-[11px] text-slate-400">Selesaikan pembayaran sesuai stand masing-masing</p>
+            </div>
+            <div class="p-5 bg-slate-50">
+                <div class="bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold p-2.5 rounded-xl mb-4 text-center">
+                    Simulasi verifikasi otomatis dalam <span id="qris-countdown">5</span> detik...
+                </div>
+                <div id="qris-container" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scroll"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Google Sheets Config -->
+    <div id="sheets-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-enter transition-all duration-300 pointer-events-none">
+        <div class="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-file-excel text-emerald-600"></i> Pengaturan Google Sheets
+                </h3>
+                <button onclick="closeModal('sheets-modal')" class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-4">
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    Masukkan URL Web App Google Apps Script Anda agar setiap pesanan pelanggan otomatis tercatat di Google Spreadsheet Anda.
+                </p>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Google Apps Script Web App URL</label>
+                    <input type="text" id="sheets-url-input" placeholder="https://script.google.com/macros/s/.../exec" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono">
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button onclick="saveSheetsUrl()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-sm">
+                        Simpan URL
+                    </button>
+                    <button onclick="testSheetsSync()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2.5 rounded-xl text-xs">
+                        Test Kirim
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'angkringan-customer-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "demo", authDomain: "demo.firebaseapp.com", projectId: "demo" };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let menuData = [];
+        let ordersList = [];
+        let cart = {};
+        let activeOrder = null;
+        let simInterval = null;
+        let clockInterval = null;
+        let alarmInterval = null;
+        let googleSheetsUrl = localStorage.getItem('angkringan_sheets_url') || '';
+
+        const formatRp = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
+
+        function playNotificationSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const playTone = (freq, delay, duration) => {
+                    setTimeout(() => {
+                        if (audioCtx.state === 'suspended') audioCtx.resume();
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start();
+                        osc.stop(audioCtx.currentTime + duration);
+                    }, delay);
+                };
+                playTone(587.33, 0, 0.3); 
+                playTone(880.00, 250, 0.4);
+                playTone(1046.50, 500, 0.5);
+                if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 400]);
+            } catch (e) {
+                console.log("Audio not supported", e);
+            }
+        }
+
+        async function initFirebase() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                startRealtimeListeners();
+            } catch (e) {
+                console.error("Auth error:", e);
+            }
+        }
+
+        async function seedMenuIfNeeded() {
+            const menuRef = collection(db, 'artifacts', appId, 'public', 'data', 'menu');
+            const menuSnapshot = await getDocs(menuRef);
+            if (menuSnapshot.empty) {
+                const defaultMenu = [
+                    { id: 1, name: 'Gorengan', price: 2000, qris: 'B', stock: 30, img: 'https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=300&q=80', desc: 'Aneka gorengan hangat (bakwan, tempe, tahu).' },
+                    { id: 2, name: 'Toast', price: 10000, qris: 'A', stock: 15, img: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=300&q=80', desc: 'Roti bakar lezat isi cokelat/keju lumer.' },
+                    { id: 3, name: 'Ekstra Jos Susu', price: 6000, qris: 'C', stock: 20, img: 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=300&q=80', desc: 'Minuman penambah stamina khas.' },
+                    { id: 4, name: 'Susu Jahe', price: 6000, qris: 'C', stock: 25, img: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=300&q=80', desc: 'Susu hangat berpadu jahe merah murni.' },
+                    { id: 5, name: 'Jahe', price: 4000, qris: 'C', stock: 20, img: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=300&q=80', desc: 'Wedang jahe hangat murni menyegarkan.' },
+                    { id: 6, name: 'Nutrisari', price: 5000, qris: 'C', stock: 35, img: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=300&q=80', desc: 'Es / hangat jeruk segar kaya vitamin.' }
+                ];
+                for (const item of defaultMenu) {
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'menu', String(item.id)), item);
+                }
+            }
+        }
+
+        function startRealtimeListeners() {
+            seedMenuIfNeeded().then(() => {
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'menu'), (snapshot) => {
+                    menuData = [];
+                    snapshot.forEach(docSnap => menuData.push({ docId: docSnap.id, ...docSnap.data() }));
+                    menuData.sort((a, b) => a.id - b.id);
+                    renderMenu();
+                }, (err) => console.error("Menu listener error:", err));
+
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'orders'), (snapshot) => {
+                    ordersList = [];
+                    snapshot.forEach(docSnap => ordersList.push({ docId: docSnap.id, ...docSnap.data() }));
+                    ordersList.sort((a, b) => a.id - b.id);
+
+                    if (activeOrder) {
+                        const found = ordersList.find(o => o.id === activeOrder.id);
+                        if (found) {
+                            activeOrder.status = found.status;
+                            updateCustomerTimeline(found.status);
+                        }
+                    }
+                }, (err) => console.error("Orders listener error:", err));
+            });
+        }
+
+        function renderMenu() {
+            const grid = document.getElementById('menu-grid');
+            if (!grid) return;
+            
+            grid.innerHTML = menuData.map(item => {
+                const isOut = item.stock <= 0;
+                return `
+                    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-md transition-all">
+                        <div class="relative h-32 bg-slate-100 overflow-hidden">
+                            <img src="${item.img}" alt="${item.name}" class="w-full h-full object-cover ${isOut ? 'grayscale opacity-50' : ''}" onerror="this.src='https://placehold.co/300x200/f59e0b/ffffff?text=Angkringan'">
+                            <div class="absolute top-2 left-2 bg-slate-900/70 backdrop-blur-md text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">
+                                QRIS ${item.qris}
+                            </div>
+                            ${isOut ? '<div class="absolute inset-0 flex items-center justify-center bg-slate-900/40 text-white font-black text-xs uppercase tracking-wider">Habis</div>' : ''}
+                        </div>
+                        <div class="p-3.5 flex-1 flex flex-col justify-between">
+                            <div>
+                                <h4 class="font-extrabold text-slate-900 text-sm mb-0.5">${item.name}</h4>
+                                <p class="text-[11px] text-slate-400 line-clamp-1 mb-2">${item.desc}</p>
+                            </div>
+                            <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block leading-none">Harga</span>
+                                    <span class="font-black text-brand-600 text-xs">${formatRp(item.price)}</span>
+                                </div>
+                                <button onclick="${isOut ? '' : `addToCart('${item.docId}')`}" class="${isOut ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-brand-500 hover:bg-brand-600 text-white shadow-sm'} w-8 h-8 rounded-xl flex items-center justify-center transition-all">
+                                    <i class="fa-solid fa-plus text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        window.addToCart = function(docId) {
+            const item = menuData.find(m => m.docId === docId);
+            if (!item || item.stock <= 0) return;
+
+            if (!cart[docId]) {
+                cart[docId] = { ...item, qty: 1 };
+            } else {
+                if (cart[docId].qty < item.stock) {
+                    cart[docId].qty++;
+                } else {
+                    return;
+                }
+            }
+            updateCartUI();
+            window.toggleCart(true);
+        };
+
+        window.updateCartQty = function(docId, delta) {
+            if (!cart[docId]) return;
+            cart[docId].qty += delta;
+            if (cart[docId].qty <= 0) delete cart[docId];
+            updateCartUI();
+        };
+
+        function updateCartUI() {
+            const container = document.getElementById('cart-items-container');
+            const badge = document.getElementById('cart-badge');
+            const footer = document.getElementById('cart-footer');
+            const totalPriceEl = document.getElementById('cart-total-price');
+            
+            const entries = Object.values(cart);
+            const totalItems = entries.reduce((acc, curr) => acc + curr.qty, 0);
+            const totalPrice = entries.reduce((acc, curr) => acc + (curr.price * curr.qty), 0);
+
+            if (totalItems > 0) {
+                badge.textContent = totalItems;
+                badge.classList.remove('hidden');
+                footer.classList.remove('hidden');
+                totalPriceEl.textContent = formatRp(totalPrice);
+                
+                container.innerHTML = entries.map(item => `
+                    <div class="flex items-center justify-between bg-slate-50 border border-slate-100 p-2.5 rounded-xl">
+                        <div class="flex items-center gap-2.5">
+                            <img src="${item.img}" class="w-10 h-10 rounded-lg object-cover" onerror="this.src='https://placehold.co/100x100/f59e0b/ffffff?text=Food'">
+                            <div>
+                                <h5 class="font-bold text-xs text-slate-900">${item.name}</h5>
+                                <p class="text-[11px] text-brand-600 font-semibold">${formatRp(item.price)}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="updateCartQty('${item.docId}', -1)" class="w-6 h-6 rounded-lg bg-white border border-slate-200 text-slate-600 flex items-center justify-center text-xs hover:bg-slate-100"><i class="fa-solid fa-minus"></i></button>
+                            <span class="font-bold text-xs text-slate-800 w-4 text-center">${item.qty}</span>
+                            <button onclick="updateCartQty('${item.docId}', 1)" class="w-6 h-6 rounded-lg bg-white border border-slate-200 text-slate-600 flex items-center justify-center text-xs hover:bg-slate-100"><i class="fa-solid fa-plus"></i></button>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                badge.classList.add('hidden');
+                footer.classList.add('hidden');
+                container.innerHTML = `
+                    <div id="empty-cart" class="flex flex-col items-center justify-center h-full text-slate-400 py-12">
+                        <i class="fa-solid fa-bowl-food text-4xl mb-2 text-slate-300"></i>
+                        <p class="text-xs font-semibold">Keranjang masih kosong</p>
+                    </div>
+                `;
+            }
+        }
+
+        window.toggleCart = function(forceOpen = false) {
+            const sidebar = document.getElementById('cart-sidebar');
+            const overlay = document.getElementById('global-overlay');
+            const isOpen = forceOpen || sidebar.classList.contains('sidebar-active');
+
+            if (isOpen && !forceOpen) {
+                sidebar.classList.remove('sidebar-active');
+                overlay.classList.remove('overlay-active');
+            } else {
+                sidebar.classList.add('sidebar-active');
+                overlay.classList.add('overlay-active');
+            }
+        };
+
+        window.closeAllModals = function() {
+            document.getElementById('cart-sidebar').classList.remove('sidebar-active');
+            ['checkout-modal', 'qris-modal', 'sheets-modal'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.remove('modal-active');
+                    el.classList.add('pointer-events-none');
+                }
+            });
+            document.getElementById('global-overlay').classList.remove('overlay-active');
+        };
+
+        window.closeModal = function(id) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.classList.remove('modal-active');
+                el.classList.add('pointer-events-none');
+            }
+            document.getElementById('global-overlay').classList.add('overlay-active');
+        };
+
+        window.openCheckoutModal = function() {
+            window.toggleCart();
+            const modal = document.getElementById('checkout-modal');
+            modal.classList.remove('pointer-events-none');
+            modal.classList.add('modal-active');
+            document.getElementById('global-overlay').classList.add('overlay-active');
+        };
+
+        window.openSheetsConfigModal = function() {
+            document.getElementById('sheets-url-input').value = googleSheetsUrl;
+            const modal = document.getElementById('sheets-modal');
+            modal.classList.remove('pointer-events-none');
+            modal.classList.add('modal-active');
+            document.getElementById('global-overlay').classList.add('overlay-active');
+        };
+
+        window.saveSheetsUrl = function() {
+            const url = document.getElementById('sheets-url-input').value.trim();
+            googleSheetsUrl = url;
+            localStorage.setItem('angkringan_sheets_url', url);
+            window.closeModal('sheets-modal');
+        };
+
+        window.testSheetsSync = function() {
+            const url = document.getElementById('sheets-url-input').value.trim();
+            if (!url) {
+                return;
+            }
+            const sample = { id: 9999, name: "Test Pelanggan", wa: "0812345", items: "Gorengan x1", total: 2000, timestamp: new Date().toLocaleString() };
+            fetch(url, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sample) })
+            .then(() => {
+                // success
+            }).catch(err => console.log(err));
+        };
+
+        window.processSplitQRIS = async function(e) {
+            e.preventDefault();
+            const name = document.getElementById('input-name').value;
+            const wa = document.getElementById('input-wa').value;
+
+            window.closeModal('checkout-modal');
+
+            const orderId = Math.floor(1000 + Math.random() * 9000);
+            const items = JSON.parse(JSON.stringify(Object.values(cart)));
+            
+            const split = { A: 0, B: 0, C: 0 };
+            items.forEach(i => { split[i.qris] += i.price * i.qty; });
+
+            activeOrder = {
+                id: orderId,
+                name,
+                wa,
+                items,
+                split,
+                status: 1, // 1: Diterima, 2: Dimasak, 3: Siap Saji
+                createdAt: new Date().toLocaleTimeString()
+            };
+
+            try {
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', String(orderId)), activeOrder);
+                syncToGoogleSheets(activeOrder);
+            } catch (err) {
+                console.error("Error saving order:", err);
+            }
+
+            const qrisContainer = document.getElementById('qris-container');
+            qrisContainer.innerHTML = Object.entries(split).filter(([k, v]) => v > 0).map(([qrisKey, amount]) => `
+                <div class="bg-white border border-slate-200 rounded-2xl p-3 text-center shadow-sm">
+                    <span class="bg-brand-100 text-brand-700 font-black text-[10px] px-2 py-0.5 rounded-full uppercase">QRIS ${qrisKey}</span>
+                    <div class="my-2 bg-slate-100 p-2 rounded-xl flex items-center justify-center">
+                        <i class="fa-solid fa-qrcode text-4xl text-slate-800"></i>
+                    </div>
+                    <p class="font-black text-slate-900 text-xs">${formatRp(amount)}</p>
+                </div>
+            `).join('');
+
+            const qrisModal = document.getElementById('qris-modal');
+            qrisModal.classList.remove('pointer-events-none');
+            qrisModal.classList.add('modal-active');
+            document.getElementById('global-overlay').classList.add('overlay-active');
+
+            let countdown = 5;
+            const countEl = document.getElementById('qris-countdown');
+            countEl.textContent = countdown;
+
+            if (simInterval) clearInterval(simInterval);
+            simInterval = setInterval(() => {
+                countdown--;
+                countEl.textContent = countdown;
+                if (countdown <= 0) {
+                    clearInterval(simInterval);
+                    window.closeModal('qris-modal');
+                    cart = {};
+                    updateCartUI();
+                    startLiveTracking();
+                }
+            }, 1000);
+        };
+
+        function startLiveTracking() {
+            const liveCard = document.getElementById('live-status-card');
+            liveCard.classList.remove('hidden');
+            
+            document.getElementById('track-order-id').textContent = activeOrder.id;
+            document.getElementById('track-name').textContent = activeOrder.name;
+            document.getElementById('track-wa').textContent = activeOrder.wa;
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            if (clockInterval) clearInterval(clockInterval);
+            clockInterval = setInterval(() => {
+                const now = new Date();
+                document.getElementById('live-clock').textContent = now.toTimeString().split(' ')[0];
+            }, 1000);
+
+            updateCustomerTimeline(1);
+        }
+
+        function updateCustomerTimeline(step) {
+            for (let i = 1; i <= 3; i++) {
+                const el = document.getElementById(`step-${i}`);
+                if (!el) continue;
+                if (i < step) {
+                    el.classList.remove('active');
+                    el.classList.add('completed');
+                } else if (i === step) {
+                    el.classList.add('active');
+                    el.classList.remove('completed');
+                } else {
+                    el.classList.remove('active', 'completed');
+                }
+            }
+
+            const descText = document.getElementById('queue-desc-text');
+            const numDisplay = document.getElementById('queue-num-display');
+            const btn = document.getElementById('btn-finish-order');
+
+            const activeQueue = ordersList.filter(o => o.status < 3);
+            const myIndex = activeQueue.findIndex(o => o.id === activeOrder?.id);
+            const queuePos = myIndex !== -1 ? myIndex + 1 : 1;
+            const totalQueue = activeQueue.length;
+            const estimatedMinutes = queuePos * 5;
+
+            if (step === 1) {
+                numDisplay.textContent = `Antrean #${queuePos} dari ${totalQueue}`;
+                descText.textContent = `Estimasi waktu tunggu: ~${estimatedMinutes} menit. Menunggu konfirmasi dapur.`;
+            } else if (step === 2) {
+                numDisplay.textContent = `Sedang Dimasak`;
+                descText.textContent = `Koki sedang meracik pesanan Anda. Segera siap!`;
+            } else if (step === 3) {
+                numDisplay.textContent = `Siap Saji`;
+                descText.textContent = `Pesanan selesai dan siap diambil di meja utama!`;
+
+                btn.className = "w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-md cursor-pointer pointer-events-auto transition-all text-xs uppercase tracking-wider animate-bounce";
+                btn.textContent = "🔔 Pesanan Siap! (Klik untuk Ambil & Selesai)";
+
+                if (!alarmInterval) {
+                    playNotificationSound();
+                    alarmInterval = setInterval(() => { playNotificationSound(); }, 2500);
+                }
+            }
+        }
+
+        window.finishCustomerOrder = async function() {
+            if (alarmInterval) {
+                clearInterval(alarmInterval);
+                alarmInterval = null;
+            }
+            if (clockInterval) clearInterval(clockInterval);
+
+            if (activeOrder) {
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', String(activeOrder.id)));
+                } catch (e) {
+                    console.error("Error finishing order:", e);
+                }
+            }
+
+            activeOrder = null;
+            document.getElementById('live-status-card').classList.add('hidden');
+            document.getElementById('order-form').reset();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        function syncToGoogleSheets(order) {
+            if (!googleSheetsUrl) return;
+            const total = order.items.reduce((acc, i) => acc + (i.price * i.qty), 0);
+            const itemsStr = order.items.map(i => `${i.name} (${i.qty})`).join(', ');
+            const payload = {
+                id: order.id,
+                name: order.name,
+                wa: order.wa,
+                items: itemsStr,
+                total: total,
+                timestamp: order.createdAt
+            };
+            fetch(googleSheetsUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).catch(err => console.log("Background sheets sync error:", err));
+        }
+
+        window.onload = () => {
+            initFirebase();
+        };
+    </script>
+</body>
+</html>
